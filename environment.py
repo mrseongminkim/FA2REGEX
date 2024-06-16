@@ -147,10 +147,10 @@ class StateEliminationEnvironment:
                 out_regex = [[0] * self.max_regex_len] * self.n_nodes
                 nodes.append(source_state_number + [is_initial_state, is_final_state] + in_length + out_length)
                 edges.append(out_regex)
-        nodes = torch.FloatTensor(nodes).to(self.device)
-        edges = torch.LongTensor(edges).to(self.device)
-        key_padding_mask = torch.BoolTensor(key_padding_mask).to(self.device)
-        attn_mask = torch.BoolTensor(attn_mask).to(self.device)
+        nodes = torch.FloatTensor(nodes).to(self.device).unsqueeze(0)
+        edges = torch.LongTensor(edges).to(self.device).unsqueeze(0)
+        key_padding_mask = torch.BoolTensor(key_padding_mask).to(self.device).unsqueeze(0)
+        attn_mask = torch.BoolTensor(attn_mask).to(self.device).unsqueeze(0)
 
         observation = {"nodes": nodes, "edges": edges, "key_padding_mask": key_padding_mask, "attn_mask": attn_mask}
         return observation

@@ -24,7 +24,7 @@ hyperparameters = cfg["hyperparameters"]
 learning_rate = hyperparameters["learning_rate"]
 gamma = hyperparameters["gamma"]
 
-class Policy(nn.Module):
+class Reinforce(nn.Module):
     def __init__(self):
         super().__init__()
         self.data = []
@@ -52,7 +52,7 @@ class Policy(nn.Module):
 def main():
     data = cfg["data"]
     env = StateEliminationEnvironment(data["n"], data["k"], data["d"], data["max_n"], data["max_k"], data["max_regex_len"])
-    pi = Policy()
+    pi = Reinforce()
     best_score = -float("inf")
     score = 0.0
     baseline_score = 0.0
