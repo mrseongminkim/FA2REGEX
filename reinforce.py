@@ -77,7 +77,7 @@ def main():
             a = m.sample()
             s_prime, r, done = env.step(a.item())
             baseline = baseline if args.baseline else 0
-            pi.put_data((r, prob[a], baseline))
+            pi.put_data((r, prob.squeeze(0)[a], baseline))
             s = s_prime
             score += r
             

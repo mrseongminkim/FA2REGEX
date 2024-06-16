@@ -1,5 +1,5 @@
 import torch
-from torch_geometric.data import Data
+#from torch_geometric.data import Data
 import FAdo.reex as reex
 
 from utils.utils_data import get_random_nfa, get_final_state_index
@@ -35,8 +35,7 @@ class StateEliminationEnvironment:
     def get_resulting_regex(self) -> reex.RegExp:
         initial_state = self.gfa.Initial
         final_state = get_final_state_index(self.gfa)
-        intermediate_state = 1
-        #intermediate_state = 3 - (initial_state + final_state) # if we fix init and final state to 0 and 2, then intermediate state is 1
+        intermediate_state = 3 - (initial_state + final_state)
 
         alpha = self.gfa.delta[initial_state][intermediate_state]
         beta = reex.CStar(self.gfa.delta[intermediate_state][intermediate_state]) if intermediate_state in self.gfa.delta[intermediate_state] else None
@@ -74,7 +73,7 @@ class StateEliminationEnvironment:
             encoded_regex = encoded_regex + [0] * (self.max_regex_len - len(encoded_regex))
         assert len(encoded_regex) == self.max_regex_len
         return encoded_regex
-
+    '''
     def gfa_to_graph(self) -> Data:
         x = []
         edge_index = [[], []]
@@ -109,7 +108,7 @@ class StateEliminationEnvironment:
         edge_attr = torch.LongTensor(edge_attr)
         graph = Data(x=x, edge_index=edge_index, edge_attr=edge_attr, num_nodes=self.n_nodes)
         return graph
-
+    '''
     def gfa_to_tensor(self) -> dict[torch.FloatTensor, torch.LongTensor, torch.BoolTensor, torch.BoolTensor]:
         nodes = []
         edges = []
