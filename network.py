@@ -80,9 +80,13 @@ class SIT(nn.Module):
 class ReinforceNetwork(nn.Module):
     def __init__(self, cfg: dict):
         super().__init__()
-        #self.embedding_with_lstm = EmbeddingWithLSTM(cfg["vocab_size"], cfg["embedding_dim"], cfg["lstm_dim"])
-        #self.regex_pooling = PMA(cfg["lstm_dim"] * 2, 1, 1, ln=False)
-        self.embed = nn.Linear(38, 256)
+        self.regex = cfg["regex"]
+        if self.regex:
+            self.embedding_with_lstm = EmbeddingWithLSTM(cfg["vocab_size"], cfg["embedding_dim"], cfg["lstm_dim"])
+            self.regex_pooling = PMA(cfg["lstm_dim"] * 2, 1, 1, ln=False)
+            self.embed = nn.Linear(166, 256)
+        else:
+            self.embed = nn.Linear(38, 256)
         self.encoder = nn.ModuleList([SAB(embed_dim=256, num_heads=1, ln=False) for _ in range(2)])
         self.decoder = PMA(embed_dim=256, num_heads=1, num_seeds=1, ln=False)
         self.sit = SIT(embed_dim=256, num_heads=1, num_seeds=1, n_layers=2, ln=False)
@@ -95,24 +99,26 @@ class ReinforceNetwork(nn.Module):
         '''
     
     def forward(self, observation: tuple[torch.FloatTensor, torch.BoolTensor, torch.BoolTensor]):
-        nodes, key_padding_mask, attn_mask = observation["nodes"], observation["key_padding_mask"], observation["attn_mask"]
+        nodes, edges, key_padding_mask, attn_mask = observation["nodes"], observation["edges"], observation["key_padding_mask"], observation["attn_mask"]
 
         n_batches = nodes.size(0)
         n_nodes = nodes.size(1)
         
-        #edges = edges.view(n_batches * n_nodes * n_nodes, max_regex_len)
-        #edges = self.embedding_with_lstm(edges)
-        #edges = edges.view(n_batches, n_nodes, n_nodes, -1)
+        if self.regex:
+            edges = edges.view(n_batches * n_nodes * n_nodes, -1)
+            edges = self.embedding_with_lstm(edges)
+            edges = edges.view(n_batches, n_nodes, n_nodes, -1)
 
-        #out_edges = edges.view(n_batches * n_nodes, n_nodes, -1)
-        #out_transition = self.regex_pooling(out_edges).squeeze(1)
-        #out_transition = out_transition.view(n_batches, n_nodes, -1)
+            out_edges = edges.view(n_batches * n_nodes, n_nodes, -1)
+            out_transition = self.regex_pooling(out_edges).squeeze(1)
+            out_transition = out_transition.view(n_batches, n_nodes, -1)
 
-        #in_edges = edges.permute(0, 2, 1, 3).reshape(n_batches * n_nodes, n_nodes, -1)
-        #in_transition = self.regex_pooling(in_edges).squeeze(1)
-        #in_transition = in_transition.view(n_batches, n_nodes, -1)
+            in_edges = edges.permute(0, 2, 1, 3).reshape(n_batches * n_nodes, n_nodes, -1)
+            in_transition = self.regex_pooling(in_edges).squeeze(1)
+            in_transition = in_transition.view(n_batches, n_nodes, -1)
 
-        #nodes = torch.cat((nodes, in_transition, out_transition), dim=-1)
+            nodes = torch.cat((nodes, in_transition, out_transition), dim=-1)
+
         nodes = F.relu(self.embed(nodes))
 
         for encoder in self.encoder:

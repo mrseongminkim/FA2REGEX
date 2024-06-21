@@ -17,6 +17,7 @@ ensure_determinism()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--baseline", action="store_true", help="Enable baseline")
+parser.add_argument("--regex", action="store_true", help="Utilize regex feature")
 args = parser.parse_args()
 
 cfg = json.load(open('model_configs/reinforce.json'))
@@ -30,6 +31,7 @@ class Reinforce(nn.Module):
         super().__init__()
         self.data = []
         network = cfg["network"]
+        network["regex"] = args.regex
         self.net = ReinforceNetwork(network).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.optimizer = optim.Adam(self.net.parameters(), lr=learning_rate)
 
@@ -61,6 +63,7 @@ def main():
     train = cfg["train"]
     print_interval = train["print_interval"]
     model_path = train["model_path"] + "_baseline" if args.baseline else train["model_path"]
+    model_path += "_regex" if args.regex else ""
 
     for n_epi in range(train["n_episodes"]):
         s = env.reset()
