@@ -280,3 +280,10 @@ def eliminate_by_repeated_state_weight_heuristic(gfa: GFA, minimization: bool, b
         for i in bridge_state_index:
             eliminate_state(gfa, i, delete_state=False)
     return gfa.delta[gfa.Initial][list(gfa.Final)[0]]
+
+def get_baseline_score(gfa: GFA):
+        gfa = copy.deepcopy(gfa)
+        bridge_state_name = decompose(gfa)
+        c6 = eliminate_by_repeated_state_weight_heuristic(gfa, minimization=False, bridge_state_name=bridge_state_name)
+        baseline = c6.treeLength()
+        return baseline

@@ -29,7 +29,7 @@ class StateEliminationEnvironment:
     def step(self, action: int):
         eliminate_state(self.gfa, action)
         reward = self.get_reward()
-        done = reward != 0
+        done = reward != 1
         return self.gfa_to_tensor(), reward, done
 
     def get_resulting_regex(self) -> reex.RegExp:
@@ -51,14 +51,14 @@ class StateEliminationEnvironment:
         if len(self.gfa.States) == 3:
             result = self.get_resulting_regex()
             length = result.treeLength()
-            return -length
+            return length
         elif len(self.gfa.States) == 2:
             initial_state = self.gfa.Initial
             final_state = get_final_state_index(self.gfa)
             length = self.gfa.delta[initial_state][final_state].treeLength()
-            return -length
+            return length
         else:
-            return 0
+            return 1
 
     def get_one_hot_vector(self, state_id: int) -> list[int]:
         one_hot_vector = [0] * self.n_nodes
@@ -111,7 +111,7 @@ class StateEliminationEnvironment:
     '''
     def gfa_to_tensor(self) -> dict[torch.FloatTensor, torch.LongTensor, torch.BoolTensor, torch.BoolTensor]:
         nodes = []
-        edges = []
+        #edges = []
         key_padding_mask = [True] * self.n_nodes # for padding
         attn_mask = [[True] * self.n_nodes] * self.n_nodes # for connectivity
         for source in range(self.n_nodes):
@@ -122,35 +122,37 @@ class StateEliminationEnvironment:
                 is_final_state = 1 if source in self.gfa.Final else 0
                 out_length = [0] * (self.n_nodes)
                 in_length = [0] * (self.n_nodes)
-                out_regex = []
+                #out_regex = []
                 for target in range(self.n_nodes):
                     if target in self.gfa.delta[source]:
                         attn_mask[source][target] = False
                         target_id = int(self.gfa.States[target])
                         out_length[target_id] = self.gfa.delta[source][target].treeLength()
-                        regex = self.get_encoded_regex(self.gfa.delta[source][target])
-                    else:
-                        regex = [0] * self.max_regex_len
-                    out_regex.append(regex)
+                        #regex = self.get_encoded_regex(self.gfa.delta[source][target])
+                    #else:
+                    #    pass
+                        #regex = [0] * self.max_regex_len
+                    #out_regex.append(regex)
                     if target in self.gfa.predecessors[source]:
                         attn_mask[target][source] = False
                         predecessor_id = int(self.gfa.States[target])
                         in_length[predecessor_id] = self.gfa.delta[target][source].treeLength()
                 nodes.append(source_state_number + [is_initial_state, is_final_state] + in_length + out_length)
-                edges.append(out_regex)
+                #edges.append(out_regex)
             else:
                 source_state_number = [0] * (self.n_nodes)
                 is_initial_state = 0
                 is_final_state = 0
                 out_length = [0] * (self.n_nodes)
                 in_length = [0] * (self.n_nodes)
-                out_regex = [[0] * self.max_regex_len] * self.n_nodes
+                #out_regex = [[0] * self.max_regex_len] * self.n_nodes
                 nodes.append(source_state_number + [is_initial_state, is_final_state] + in_length + out_length)
-                edges.append(out_regex)
+                #edges.append(out_regex)
         nodes = torch.FloatTensor(nodes).to(self.device).unsqueeze(0)
-        edges = torch.LongTensor(edges).to(self.device).unsqueeze(0)
+        #edges = torch.LongTensor(edges).to(self.device).unsqueeze(0)
         key_padding_mask = torch.BoolTensor(key_padding_mask).to(self.device).unsqueeze(0)
         attn_mask = torch.BoolTensor(attn_mask).to(self.device).unsqueeze(0)
 
-        observation = {"nodes": nodes, "edges": edges, "key_padding_mask": key_padding_mask, "attn_mask": attn_mask}
+        #observation = {"nodes": nodes, "edges": edges, "key_padding_mask": key_padding_mask, "attn_mask": attn_mask}
+        observation = {"nodes": nodes, "key_padding_mask": key_padding_mask, "attn_mask": attn_mask}
         return observation

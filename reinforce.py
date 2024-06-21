@@ -1,6 +1,7 @@
 import json
 import copy
 import argparse
+import math
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ from torch.distributions import Categorical
 from environment import StateEliminationEnvironment
 from network import ReinforceNetwork
 from utils.utils import ensure_determinism
-from utils.utils_gfa import decompose, eliminate_by_repeated_state_weight_heuristic
+from utils.utils_gfa import get_baseline_score
 
 ensure_determinism()
 
@@ -53,7 +54,7 @@ def main():
     data = cfg["data"]
     env = StateEliminationEnvironment(data["n"], data["k"], data["d"], data["max_n"], data["max_k"], data["max_regex_len"])
     pi = Reinforce()
-    best_score = -float("inf")
+    best_score = float("inf")
     score = 0.0
     baseline_score = 0.0
 
@@ -64,29 +65,27 @@ def main():
     for n_epi in range(train["n_episodes"]):
         s = env.reset()
         done = False
-
-        gfa = copy.deepcopy(env.gfa)
-        bridge_state_name = decompose(gfa)
-        c6 = eliminate_by_repeated_state_weight_heuristic(gfa, minimization=False, bridge_state_name=bridge_state_name)
-        baseline = -c6.treeLength()
-        baseline_score += baseline
-
+        c6_length = get_baseline_score(env.gfa)
+        baseline = -math.log(c6_length)
+        baseline_score += c6_length
         while not done:
             prob = pi(s)
             m = Categorical(prob)
             a = m.sample()
-            s_prime, r, done = env.step(a.item())
+            try:
+                s_prime, r, done = env.step(a.item())
+                scaled_r = -math.log(r)
+            except:
+                continue
             baseline = baseline if args.baseline else 0
-            pi.put_data((r, prob.squeeze(0)[a], baseline))
+            pi.put_data((scaled_r, prob.squeeze(0)[a], baseline))
             s = s_prime
             score += r
-            
         pi.train_net()
-        
         if n_epi % print_interval == 0 and n_epi != 0:
             avg_baseline_score = baseline_score / print_interval
             avg_score = score / print_interval
-            if avg_score > best_score:
+            if avg_score < best_score:
                 best_score = avg_score
                 torch.save(pi.net.state_dict(), model_path + ".pt")
                 with open(model_path + ".log", "w") as f:
