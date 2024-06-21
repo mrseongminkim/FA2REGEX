@@ -1,11 +1,9 @@
 {
     "hyperparameters": {
-        "learning_rate": 0.00005,
-        "gamma": 0.98,
-        "lmbda": 0.95,
-        "eps_clip": 0.1,
-        "K_epochs": 3,
-        "T_horizon": 20
+        "learning_rate": 0.00003,
+        "gamma": 1.00,
+        "eps_clip": 0.2,
+        "K_epochs": 1
     },
     "network": {
         "vocab_size": 16,

@@ -80,58 +80,65 @@ class SIT(nn.Module):
 class ReinforceNetwork(nn.Module):
     def __init__(self, cfg: dict):
         super().__init__()
-        self.embedding_with_lstm = EmbeddingWithLSTM(cfg["vocab_size"], cfg["embedding_dim"], cfg["lstm_dim"])
-        self.regex_pooling = PMA(cfg["lstm_dim"] * 2, 1, 1, ln=False)
-        self.embed = nn.Linear(166, 256)
+        #self.embedding_with_lstm = EmbeddingWithLSTM(cfg["vocab_size"], cfg["embedding_dim"], cfg["lstm_dim"])
+        #self.regex_pooling = PMA(cfg["lstm_dim"] * 2, 1, 1, ln=False)
+        self.embed = nn.Linear(38, 256)
         self.encoder = nn.ModuleList([SAB(embed_dim=256, num_heads=1, ln=False) for _ in range(2)])
         self.decoder = PMA(embed_dim=256, num_heads=1, num_seeds=1, ln=False)
         self.sit = SIT(embed_dim=256, num_heads=1, num_seeds=1, n_layers=2, ln=False)
-        self.linear = nn.Sequential(
+        '''
+        self.policy_head = nn.Sequential(
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Linear(128, 1)
         )
+        '''
     
-    def forward(self, observation: tuple[torch.FloatTensor, torch.LongTensor, torch.BoolTensor, torch.BoolTensor]):
-        nodes, edges, key_padding_mask, attn_mask = observation["nodes"], observation["edges"], observation["key_padding_mask"].unsqueeze(0), observation["attn_mask"].unsqueeze(0)
-        n_nodes = edges.size(0)
-        max_regex_len = edges.size(2)
-        
-        edges = edges.view(n_nodes * n_nodes, max_regex_len)
-        edges = self.embedding_with_lstm(edges)
-        edges = edges.view(n_nodes, n_nodes, -1)
-        out_transition = self.regex_pooling(edges).squeeze(1)
-        in_transition = edges.permute(1, 0, 2)
-        in_transition = self.regex_pooling(in_transition).squeeze(1)
+    def forward(self, observation: tuple[torch.FloatTensor, torch.BoolTensor, torch.BoolTensor]):
+        nodes, key_padding_mask, attn_mask = observation["nodes"], observation["key_padding_mask"], observation["attn_mask"]
 
-        nodes = torch.cat((nodes, in_transition, out_transition), dim=-1).unsqueeze(0)
+        n_batches = nodes.size(0)
+        n_nodes = nodes.size(1)
+        
+        #edges = edges.view(n_batches * n_nodes * n_nodes, max_regex_len)
+        #edges = self.embedding_with_lstm(edges)
+        #edges = edges.view(n_batches, n_nodes, n_nodes, -1)
+
+        #out_edges = edges.view(n_batches * n_nodes, n_nodes, -1)
+        #out_transition = self.regex_pooling(out_edges).squeeze(1)
+        #out_transition = out_transition.view(n_batches, n_nodes, -1)
+
+        #in_edges = edges.permute(0, 2, 1, 3).reshape(n_batches * n_nodes, n_nodes, -1)
+        #in_transition = self.regex_pooling(in_edges).squeeze(1)
+        #in_transition = in_transition.view(n_batches, n_nodes, -1)
+
+        #nodes = torch.cat((nodes, in_transition, out_transition), dim=-1)
         nodes = F.relu(self.embed(nodes))
 
         for encoder in self.encoder:
             nodes = encoder(nodes, key_padding_mask=key_padding_mask, attn_mask=attn_mask)
         set_representation = self.decoder(nodes, key_padding_mask=key_padding_mask)
 
-        set_key_padding_mask = torch.full((1, n_nodes + 1), False, device=key_padding_mask.device)
+        set_key_padding_mask = torch.full((n_batches, n_nodes + 1), False, device=key_padding_mask.device)
         set_key_padding_mask[:, :n_nodes] = key_padding_mask
-        set_attn_mask = torch.full((1, n_nodes + 1, n_nodes + 1), False, device=attn_mask.device)
+        set_attn_mask = torch.full((n_batches, n_nodes + 1, n_nodes + 1), False, device=attn_mask.device)
         set_attn_mask[:, :n_nodes, :n_nodes] = attn_mask
 
         set_representation, nodes = self.sit(set_representation, nodes, set_key_padding_mask, set_attn_mask)
 
-        nodes = self.linear(nodes).squeeze(-1)
-
         output_mask = key_padding_mask
         output_mask[:, 0:2] = True
-        nodes = nodes.masked_fill(output_mask, -1e9)
-        prob = F.softmax(nodes, dim=-1)
-        return prob
+        attention = torch.bmm(set_representation, nodes.permute(0, 2, 1))
+        attention = attention.masked_fill(output_mask, -float("inf"))
+        attention = F.softmax(attention, dim=-1).squeeze(1)
+        return attention
 
 class PpoNetwork(nn.Module):
     def __init__(self, cfg: dict):
         super().__init__()
         self.embedding_with_lstm = EmbeddingWithLSTM(cfg["vocab_size"], cfg["embedding_dim"], cfg["lstm_dim"])
         self.regex_pooling = PMA(cfg["lstm_dim"] * 2, 1, 1, ln=False)
-        self.embed = nn.Linear(166, 256)
+        self.embed = nn.Linear(38, 256)
         self.encoder = nn.ModuleList([SAB(embed_dim=256, num_heads=1, ln=False) for _ in range(2)])
         self.decoder = PMA(embed_dim=256, num_heads=1, num_seeds=1, ln=False)
         self.sit = SIT(embed_dim=256, num_heads=1, num_seeds=1, n_layers=2, ln=False)
@@ -170,8 +177,12 @@ class PpoNetwork(nn.Module):
         #    submodule.register_forward_hook(nan_hook)
 
     def forward(self, observation: tuple[torch.FloatTensor, torch.LongTensor, torch.BoolTensor, torch.BoolTensor]):
-        nodes, edges, key_padding_mask, attn_mask = observation["nodes"], observation["edges"], observation["key_padding_mask"], observation["attn_mask"]
-        
+        #nodes, edges, key_padding_mask, attn_mask = observation["nodes"], observation["edges"], observation["key_padding_mask"], observation["attn_mask"]
+        nodes, key_padding_mask, attn_mask = observation["nodes"], observation["key_padding_mask"], observation["attn_mask"]
+
+        n_batches = nodes.size(0)
+        n_nodes = nodes.size(1)
+        '''
         n_batches = edges.size(0)
         n_nodes = edges.size(1)
         max_regex_len = edges.size(-1)
@@ -189,6 +200,7 @@ class PpoNetwork(nn.Module):
         in_transition = in_transition.view(n_batches, n_nodes, -1)
 
         nodes = torch.cat((nodes, in_transition, out_transition), dim=-1)
+        '''
         nodes = F.relu(self.embed(nodes))
 
         for encoder in self.encoder:
@@ -214,5 +226,5 @@ class PpoNetwork(nn.Module):
 
         nodes = nodes.masked_fill(output_mask, -1e9)
         prob = F.softmax(nodes, dim=-1)
-
+        
         return prob, value
